@@ -1,0 +1,32 @@
+[Unit]
+Description=Breadboard Simulator API (bug reports)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bsimapi
+Group=bsimapi
+WorkingDirectory=/opt/breadboard-simulator-api
+EnvironmentFile=/etc/breadboard-simulator-api.env
+ExecStart=/usr/bin/env node --disable-warning=ExperimentalWarning src/server.js
+Restart=on-failure
+RestartSec=2
+StateDirectory=breadboard-simulator-api
+StateDirectoryMode=0750
+
+# Hardening. If the service fails with status=226/NAMESPACE inside an unprivileged LXC,
+# enable "nesting" on the container (Options > Features) or comment these out.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

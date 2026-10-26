@@ -1,0 +1,16 @@
+{
+  "name": "breadboard-simulator-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small self-hosted backend for Breadboard Simulator (bug reports)",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "license": "UNLICENSED"
+}
