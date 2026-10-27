@@ -165,6 +165,15 @@ test('admin endpoints need the token', async () => {
   assert.equal((await fetch(`${base}/healthz`)).status, 200);
 });
 
+test('health check is readable from the app origin only', async () => {
+  const app = await fetch(`${base}/healthz`, { headers: { Origin: ORIGIN } });
+  assert.equal(app.status, 200);
+  assert.equal(app.headers.get('access-control-allow-origin'), ORIGIN);
+  const other = await fetch(`${base}/healthz`, { headers: { Origin: 'https://evil.example' } });
+  assert.equal(other.status, 200);
+  assert.equal(other.headers.get('access-control-allow-origin'), null);
+});
+
 test('rate limiter: windows, daily caps and optional global limits', () => {
   let now = Date.UTC(2026, 9, 26, 12);
   const rl = new RateLimiter(cfg({ perIpWindowMax: 2, perIpWindowMs: 60_000, perIpDailyMax: 3 }), () => now);

@@ -181,6 +181,6 @@ links to the app with `#<circuit>` so a reported circuit opens in one click.
 
 ## Other
 
-- `GET /healthz` returns `200 {"ok":true}`.
+- `GET /healthz` returns `200 {"ok":true}`, with CORS headers for allowed origins (the app checks it before offering "Report a bug").
 - Every response has `Cache-Control: no-store` and
   `X-Content-Type-Options: nosniff`.

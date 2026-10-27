@@ -131,7 +131,12 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const method = req.method;
 
-    if (path === '/healthz' && (method === 'GET' || method === 'HEAD')) return send(res, 200, { ok: true });
+    if (path === '/healthz' && (method === 'GET' || method === 'HEAD')) {
+      // Allowed app origins may read it, so the app can hide "Report a bug" while the service is down.
+      const origin = req.headers.origin;
+      const cors = origin && cfg.allowedOrigins.includes(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+      return send(res, 200, { ok: true }, cors);
+    }
 
     if (path === '/admin' && method === 'GET') {
       res.writeHead(200, {
