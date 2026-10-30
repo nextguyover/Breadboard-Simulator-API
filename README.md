@@ -16,20 +16,42 @@ The full API is in [docs/API.md](docs/API.md).
 
 ```sh
 # 1. Node.js 22 (skip if `node -v` already shows 22.13 or newer)
-apt-get update && apt-get install -y curl git ca-certificates
+apt-get update && apt-get install -y curl git ca-certificates openssh-client
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
 
-# 2. The service
-git clone https://github.com/nextguyover/Breadboard-Simulator-API.git /root/breadboard-simulator-api
-cd /root/breadboard-simulator-api
-./deploy/install.sh
+# 2. A read-only deploy key, because the repo is private
+ssh-keygen -t ed25519 -N "" -f /root/.ssh/bsim_api_deploy -C bsim-api-lxc
+cat /root/.ssh/bsim_api_deploy.pub
+#    Paste it in GitHub: repo Settings > Deploy keys > Add deploy key
+#    (leave "Allow write access" unticked).
+cat >> /root/.ssh/config <<'CFG'
+Host github-bsim-api
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/bsim_api_deploy
+  IdentitiesOnly yes
+CFG
+ssh-keyscan github.com >> /root/.ssh/known_hosts
+
+# 3. Clone and install
+git clone github-bsim-api:nextguyover/Breadboard-Simulator-API.git /opt/breadboard-simulator-api-src
+/opt/breadboard-simulator-api-src/deploy/install.sh
 ```
 
 `install.sh` copies the app to `/opt/breadboard-simulator-api`, creates a
 `bsimapi` system user, writes `/etc/breadboard-simulator-api.env` with a fresh
-admin token (printed once), installs the systemd unit and starts it on
-`127.0.0.1:8787`. Run it again after `git pull` to update; your env file and
-data are kept.
+admin token (printed once), installs the systemd unit, starts it on
+`127.0.0.1:8787`, and links the `bsim-api-update` command.
+
+## Updating
+
+```sh
+bsim-api-update
+```
+
+It pulls the latest `main` into the checkout and reruns `install.sh`. Your
+env file and data are kept. The service has no npm dependencies, so there is
+nothing else to install.
 
 Settings live in `/etc/breadboard-simulator-api.env` (see
 [the example](deploy/breadboard-simulator-api.env.example)). After editing it:

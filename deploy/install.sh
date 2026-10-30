@@ -28,6 +28,7 @@ if ! id bsimapi >/dev/null 2>&1; then
 fi
 
 mkdir -p "$APP_DIR"
+rm -rf "$APP_DIR/src"
 cp -r "$SRC_DIR/src" "$SRC_DIR/package.json" "$APP_DIR/"
 chown -R root:root "$APP_DIR"
 chmod -R a+rX "$APP_DIR"
@@ -47,6 +48,7 @@ else
 fi
 
 cp "$SRC_DIR/deploy/breadboard-simulator-api.service" "$UNIT"
+ln -sf "$SRC_DIR/deploy/update.sh" /usr/local/bin/bsim-api-update
 systemctl daemon-reload
 systemctl enable breadboard-simulator-api >/dev/null
 systemctl restart breadboard-simulator-api
