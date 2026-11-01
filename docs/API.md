@@ -119,7 +119,10 @@ and deleted.
 ## Admin endpoints
 
 All need `Authorization: Bearer <ADMIN_TOKEN>`. Wrong or missing token gives
-`401 unauthorized`. No CORS (same-origin admin page only).
+`401 unauthorized`. After 5 wrong tokens from one IP within 15 minutes, that IP
+gets `429 too_many_auth_failures` (with `Retry-After`) on every admin endpoint
+for 1 hour, even with the right token (`AUTH_FAIL_MAX`, `AUTH_FAIL_WINDOW_SEC`,
+`AUTH_LOCKOUT_SEC`). Lockouts are logged to the journal with the IP's hash. No CORS (same-origin admin page only).
 
 ### `GET /v1/reports?limit=50&before=<id>&status=<status>`
 

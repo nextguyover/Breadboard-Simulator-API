@@ -144,6 +144,11 @@ function el(tag, props = {}, ...kids) {
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
   if (res.status === 401) { showLogin('That token was not accepted.'); throw new Error('unauthorized'); }
+  if (res.status === 429) {
+    const mins = Math.ceil(Number(res.headers.get('Retry-After') || 60) / 60);
+    showLogin(`Too many wrong tokens from this network. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`);
+    throw new Error('unauthorized');
+  }
   if (!res.ok && res.status !== 204) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
   return res;
 }

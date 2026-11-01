@@ -63,3 +63,50 @@ export class RateLimiter {
   }
 }
 
+
+// Locks an IP out of the admin endpoints after too many wrong tokens, so the token can't be
+// brute-forced. While locked out even the right token is refused.
+export class AuthGuard {
+  constructor({ authFailMax, authFailWindowMs, authLockoutMs }, now = () => Date.now()) {
+    this.max = authFailMax;
+    this.windowMs = authFailWindowMs;
+    this.lockoutMs = authLockoutMs;
+    this.now = now;
+    this.byIp = new Map(); // ip key -> { fails: timestamps in the window, lockedUntil }
+  }
+
+  // Seconds until this IP may try again, or 0 when it isn't locked out.
+  lockedFor(key) {
+    const e = this.byIp.get(key);
+    if (!e || !e.lockedUntil) return 0;
+    const left = e.lockedUntil - this.now();
+    if (left > 0) return Math.ceil(left / 1000);
+    this.byIp.delete(key);
+    return 0;
+  }
+
+  // Records a wrong token. Returns the lockout in seconds if this attempt triggered one.
+  fail(key) {
+    const t = this.now();
+    if (this.byIp.size > 10_000) this.prune(t);
+    const e = this.byIp.get(key) || { fails: [], lockedUntil: 0 };
+    e.fails = e.fails.filter((f) => t - f < this.windowMs);
+    e.fails.push(t);
+    if (e.fails.length >= this.max) {
+      e.fails = [];
+      e.lockedUntil = t + this.lockoutMs;
+    }
+    this.byIp.set(key, e);
+    return e.lockedUntil > t ? Math.ceil(this.lockoutMs / 1000) : 0;
+  }
+
+  succeed(key) {
+    this.byIp.delete(key);
+  }
+
+  prune(t) {
+    for (const [key, e] of this.byIp) {
+      if (e.lockedUntil <= t && e.fails.every((f) => t - f >= this.windowMs)) this.byIp.delete(key);
+    }
+  }
+}

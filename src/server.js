@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { openDb } from './db.js';
-import { RateLimiter } from './ratelimit.js';
+import { AuthGuard, RateLimiter } from './ratelimit.js';
 import { validatePatch, validateReport, STATUSES } from './validate.js';
 
 const ADMIN_HTML = readFileSync(new URL('./admin.html', import.meta.url), 'utf8');
@@ -22,6 +22,7 @@ const sha256 = (s) => createHash('sha256').update(s).digest();
 
 export function createApp(cfg, db = openDb(cfg.dbPath)) {
   const limiter = new RateLimiter(cfg);
+  const authGuard = new AuthGuard({ authFailMax: 5, authFailWindowMs: 900_000, authLockoutMs: 3_600_000, ...cfg });
   const adminTokenHash = sha256(cfg.adminToken);
   const adminHtml = ADMIN_HTML.replace('__APP_URL__', JSON.stringify(cfg.appUrl).replace(/</g, '\\u003c'));
 
@@ -38,10 +39,27 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
   }
 
   function requireAdmin(req) {
+    const ip = clientIp(req);
+    const locked = authGuard.lockedFor(ip);
+    if (locked) throw tooManyAuthFailures(locked);
     const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
-    if (!m || !timingSafeEqual(sha256(m[1]), adminTokenHash)) {
+    if (!m) throw new HttpError(401, 'unauthorized', 'Missing or wrong admin token');
+    if (!timingSafeEqual(sha256(m[1]), adminTokenHash)) {
+      const lockout = authGuard.fail(ip);
+      if (lockout) {
+        console.warn(`admin login: too many wrong tokens from ${ipHash(ip)}, locked out for ${lockout} s`);
+        throw tooManyAuthFailures(lockout);
+      }
       throw new HttpError(401, 'unauthorized', 'Missing or wrong admin token');
     }
+    authGuard.succeed(ip);
+  }
+
+  function tooManyAuthFailures(retryAfter) {
+    return Object.assign(
+      new HttpError(429, 'too_many_auth_failures', 'Too many wrong admin tokens from this address, try again later', { retryAfter }),
+      { headers: { 'Retry-After': String(retryAfter) } },
+    );
   }
 
   function corsHeaders(req) {

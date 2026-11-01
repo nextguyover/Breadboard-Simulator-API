@@ -29,6 +29,11 @@ export function loadConfig(overrides = {}) {
     perIpWindowMs: int('RATE_PER_IP_WINDOW_SEC', 600) * 1000,
     perIpWindowMax: int('RATE_PER_IP_WINDOW_MAX', 5),
     perIpDailyMax: int('RATE_PER_IP_DAILY_MAX', 20),
+
+    // Wrong admin tokens: after AUTH_FAIL_MAX within the window, the IP is locked out.
+    authFailMax: int('AUTH_FAIL_MAX', 5),
+    authFailWindowMs: int('AUTH_FAIL_WINDOW_SEC', 900) * 1000,
+    authLockoutMs: int('AUTH_LOCKOUT_SEC', 3600) * 1000,
     globalPerSec: int('RATE_GLOBAL_PER_SEC', 0),
     globalBurst: int('RATE_GLOBAL_BURST', 10),
     globalDailyMax: int('RATE_GLOBAL_DAILY_MAX', 0),
