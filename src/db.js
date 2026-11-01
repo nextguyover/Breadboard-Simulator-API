@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { setupAnalytics } from './analytics.js';
 
 const SUMMARY_LEN = 140;
 
@@ -46,6 +47,8 @@ export function openDb(path) {
   const counts = db.prepare('SELECT status, COUNT(*) AS n FROM reports GROUP BY status');
 
   return {
+    analytics: setupAnalytics(db),
+
     insert(r) {
       const createdAt = new Date().toISOString();
       const res = insert.run(

@@ -1,8 +1,9 @@
 # Breadboard Simulator API
 
-A small self-hosted backend for Breadboard Simulator. For now it does one job:
-the web app's **Report a bug** option posts reports here, they are saved in
-SQLite, and you can read and triage them on a built-in admin page.
+A small self-hosted backend for Breadboard Simulator. The web app's **Report a
+bug** option posts reports here, they are saved in SQLite, and you can read and
+triage them on a built-in admin page. The app's launch ping also feeds an
+**Analytics** tab: launches over time, countries, cities, devices and browsers.
 
 - No dependencies: plain Node.js 22.13+ (uses the built-in `node:sqlite`).
 - Runs as a normal systemd service, made for a small Debian/Ubuntu LXC on
@@ -76,6 +77,14 @@ port is opened and the `CF-Connecting-IP` header can be trusted:
 
 Then set `ALLOWED_ORIGINS` to the web app's origin(s) and build the app with
 `VITE_BUG_REPORT_URL=https://api.breadboardsimulator.com`.
+
+## Analytics
+
+The **Analytics** tab on `/admin` counts app launches (one ping per app load)
+and shows them over time and by country, city, device, OS, browser and hour.
+Countries work out of the box behind Cloudflare. For cities, turn on
+**Add visitor location headers** in the Cloudflare dashboard under Rules,
+Settings (Managed Transforms). See [docs/API.md](docs/API.md#launch-analytics).
 
 ## Reading reports
 

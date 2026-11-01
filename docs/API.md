@@ -179,8 +179,51 @@ links to the app with `#<circuit>` so a reported circuit opens in one click.
 
 ---
 
+## Launch analytics
+
+The app calls `GET /healthz` once when it loads. Each such call from an
+allowed app origin is logged as one **launch**. Calls with no `Origin`
+(monitoring, the install script) are not counted, and the app adds
+`?recheck=1` to later checks (for example when the connection comes back) so
+those aren't counted either. A second launch from the same visitor within 10
+seconds is ignored.
+
+Each launch stores: time, a salted hash of IP + user agent (the "visitor"),
+country, region and city from Cloudflare's visitor headers, and browser, OS
+and device type parsed from the user agent. No raw IPs or user agents are
+kept.
+
+- Country comes from `CF-IPCountry`, which Cloudflare adds by default.
+- Region and city need the **Add visitor location headers** managed transform
+  (Cloudflare dashboard: Rules, Settings / Managed Transforms). It is free.
+- Both are only read when `TRUST_CLOUDFLARE=1`. Requests without them are
+  counted under country `XX` (unknown).
+
+### `GET /v1/analytics?days=30&tz=600` (admin)
+
+`days` is how far back to look (0 = all time, default 30). `tz` is the
+viewer's UTC offset in minutes so daily and hourly buckets match their
+calendar (the admin page sends it automatically).
+
+```json
+{
+  "days": 30,
+  "totals": { "launches": 818, "visitors": 252, "returningVisitors": 208 },
+  "daily": [{ "day": "2026-10-31", "launches": 40, "visitors": 37 }],
+  "hours": [{ "hour": 9, "launches": 31 }],
+  "countries": [{ "key": "US", "launches": 286, "visitors": 90 }],
+  "cities": [{ "country": "DE", "region": "Bavaria", "city": "München", "launches": 88, "visitors": 30 }],
+  "browsers": [{ "key": "Chrome", "launches": 336, "visitors": 101 }],
+  "os": [{ "key": "Windows", "launches": 342, "visitors": 99 }],
+  "devices": [{ "key": "Desktop", "launches": 499, "visitors": 150 }],
+  "firstLaunch": "2026-10-02T03:11:09.000Z"
+}
+```
+
+The admin page's **Analytics** tab shows all of this as charts.
+
 ## Other
 
-- `GET /healthz` returns `200 {"ok":true}`, with CORS headers for allowed origins (the app checks it before offering "Report a bug").
+- `GET /healthz` returns `200 {"ok":true}`, with CORS headers for allowed origins (the app checks it before offering "Report a bug", and it doubles as the launch counter above).
 - Every response has `Cache-Control: no-store` and
   `X-Content-Type-Options: nosniff`.

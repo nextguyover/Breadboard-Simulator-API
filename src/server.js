@@ -126,6 +126,28 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
     return send(res, 201, saved, cors);
   }
 
+  function recordLaunch(req) {
+    try {
+      const ip = clientIp(req);
+      const ua = (req.headers['user-agent'] || '').slice(0, 512);
+      const cf = (name) => {
+        const v = cfg.trustCloudflare ? req.headers[name] : undefined;
+        // Node reads header bytes as latin1; Cloudflare sends UTF-8 (e.g. "München").
+        return typeof v === 'string' && v ? Buffer.from(v, 'latin1').toString('utf8').slice(0, 100) : undefined;
+      };
+      const country = cf('cf-ipcountry')?.toUpperCase();
+      db.analytics.record({
+        visitor: ipHash(`${ip}|${ua}`),
+        country: country && /^[A-Z0-9]{2}$/.test(country) ? country : 'XX',
+        region: cf('cf-region'),
+        city: cf('cf-ipcity'),
+        userAgent: ua,
+      });
+    } catch (err) {
+      console.error('could not record launch', err);
+    }
+  }
+
   async function route(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -134,8 +156,22 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
     if (path === '/healthz' && (method === 'GET' || method === 'HEAD')) {
       // Allowed app origins may read it, so the app can hide "Report a bug" while the service is down.
       const origin = req.headers.origin;
-      const cors = origin && cfg.allowedOrigins.includes(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+      const fromApp = !!origin && cfg.allowedOrigins.includes(origin);
+      const cors = fromApp ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+      // The app pings once per launch, so each ping from the app counts as a launch. Monitoring
+      // and install checks send no Origin, and the app marks repeat checks with ?recheck=1.
+      if (fromApp && method === 'GET' && !url.searchParams.has('recheck')) recordLaunch(req);
       return send(res, 200, { ok: true }, cors);
+    }
+
+    if (path === '/v1/analytics' && method === 'GET') {
+      requireAdmin(req);
+      const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : 30;
+      const tzMinutes = url.searchParams.has('tz') ? Number(url.searchParams.get('tz')) : 0;
+      if (!Number.isInteger(days) || days < 0 || days > 3660 || !Number.isInteger(tzMinutes) || Math.abs(tzMinutes) > 900) {
+        throw new HttpError(400, 'validation_failed', 'Bad query', { fields: { days: '0 to 3660', tz: '-900 to 900' } });
+      }
+      return send(res, 200, { days, ...db.analytics.summary({ days, tzMinutes }) });
     }
 
     if (path === '/admin' && method === 'GET') {
