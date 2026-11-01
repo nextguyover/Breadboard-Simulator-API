@@ -46,13 +46,19 @@ admin token (printed once), installs the systemd unit, starts it on
 
 ## Updating
 
+Updates are automatic. Every minute a systemd timer checks the `prod` branch
+(set `DEPLOY_BRANCH` in the env file to change it). When there is a new
+commit it runs the tests, installs it and restarts the service, and rolls
+back if the service doesn't come up healthy. A version that fails is not
+retried until something newer lands. So releasing is just:
+
 ```sh
-bsim-api-update
+git push origin main:prod
 ```
 
-It pulls the latest `main` into the checkout and reruns `install.sh`. Your
-env file and data are kept. The service has no npm dependencies, so there is
-nothing else to install.
+To update by hand right away: `bsim-api-update`. To see what the updater did:
+`journalctl -u breadboard-simulator-api-update`. To turn auto-updates off for
+good: `touch /etc/breadboard-simulator-api.no-auto-update && systemctl disable --now breadboard-simulator-api-update.timer`.
 
 Settings live in `/etc/breadboard-simulator-api.env` (see
 [the example](deploy/breadboard-simulator-api.env.example)). After editing it:

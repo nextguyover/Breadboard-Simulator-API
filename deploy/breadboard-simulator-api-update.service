@@ -1,0 +1,8 @@
+[Unit]
+Description=Update Breadboard Simulator API from its deploy branch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bsim-api-update --auto

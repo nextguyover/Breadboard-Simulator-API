@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for Breadboard Simulator API updates every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+RandomizedDelaySec=15s
+
+[Install]
+WantedBy=timers.target

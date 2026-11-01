@@ -49,8 +49,14 @@ fi
 
 cp "$SRC_DIR/deploy/breadboard-simulator-api.service" "$UNIT"
 ln -sf "$SRC_DIR/deploy/update.sh" /usr/local/bin/bsim-api-update
+cp "$SRC_DIR/deploy/breadboard-simulator-api-update.service" "$SRC_DIR/deploy/breadboard-simulator-api-update.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable breadboard-simulator-api >/dev/null
+# Auto-updates from the deploy branch. To turn off for good:
+#   touch /etc/breadboard-simulator-api.no-auto-update && systemctl disable --now breadboard-simulator-api-update.timer
+if [ ! -f /etc/breadboard-simulator-api.no-auto-update ]; then
+  systemctl enable --now breadboard-simulator-api-update.timer >/dev/null
+fi
 systemctl restart breadboard-simulator-api
 systemctl --no-pager --lines=5 status breadboard-simulator-api || true
 
