@@ -81,6 +81,28 @@ test('verified bots are excluded and datacenter traffic can be hidden', async ()
   assert.deepEqual(hidden.networks.map((n) => n.asn), [9500]);
 });
 
+test('lists visitors and shows one visitor\'s launches', async () => {
+  const auth = { headers: { Authorization: `Bearer ${ADMIN}` } };
+  const list = await (await fetch(`${base}/v1/analytics/visitors?days=7&limit=2`, auth)).json();
+  assert.equal(list.visitors.length, 2);
+  assert.ok(list.total >= 6);
+  const v = list.visitors[0];
+  assert.match(v.visitor, /^[0-9a-f]{16}$/);
+  assert.ok(v.device && v.os && v.browser && v.lastSeen);
+  const page2 = await (await fetch(`${base}/v1/analytics/visitors?days=7&limit=2&offset=2`, auth)).json();
+  assert.notEqual(page2.visitors[0].visitor, v.visitor);
+
+  const one = await (await fetch(`${base}/v1/analytics/visitors/${v.visitor}`, auth)).json();
+  assert.equal(one.visitor, v.visitor);
+  assert.ok(one.launches.length >= 1);
+  assert.equal((await fetch(`${base}/v1/analytics/visitors/0000000000000000`, auth)).status, 404);
+  assert.equal((await fetch(`${base}/v1/analytics/visitors/${v.visitor}`)).status, 401);
+
+  // Verified bots never show up as visitors.
+  const all = await (await fetch(`${base}/v1/analytics/visitors?days=7&limit=200`, auth)).json();
+  assert.ok(all.visitors.every((x) => x.asn !== 15169));
+});
+
 test('analytics needs the admin token and validates its query', async () => {
   assert.equal((await fetch(`${base}/v1/analytics`)).status, 401);
   const bad = await fetch(`${base}/v1/analytics?days=-1`, { headers: { Authorization: `Bearer ${ADMIN}` } });

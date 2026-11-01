@@ -185,15 +185,32 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
       return send(res, 200, { ok: true }, cors);
     }
 
-    if (path === '/v1/analytics' && method === 'GET') {
+    if ((path === '/v1/analytics' || path === '/v1/analytics/visitors') && method === 'GET') {
       requireAdmin(req);
-      const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : 30;
-      const tzMinutes = url.searchParams.has('tz') ? Number(url.searchParams.get('tz')) : 0;
-      if (!Number.isInteger(days) || days < 0 || days > 3660 || !Number.isInteger(tzMinutes) || Math.abs(tzMinutes) > 900) {
-        throw new HttpError(400, 'validation_failed', 'Bad query', { fields: { days: '0 to 3660', tz: '-900 to 900' } });
+      const num = (name, fallback) => (url.searchParams.has(name) ? Number(url.searchParams.get(name)) : fallback);
+      const days = num('days', 30);
+      const tzMinutes = num('tz', 0);
+      const limit = num('limit', 50);
+      const offset = num('offset', 0);
+      if (!Number.isInteger(days) || days < 0 || days > 3660 || !Number.isInteger(tzMinutes) || Math.abs(tzMinutes) > 900
+        || !Number.isInteger(limit) || limit < 1 || limit > 200 || !Number.isInteger(offset) || offset < 0) {
+        throw new HttpError(400, 'validation_failed', 'Bad query', {
+          fields: { days: '0 to 3660', tz: '-900 to 900', limit: '1 to 200', offset: '0 or more' },
+        });
       }
       const hideDatacenter = url.searchParams.get('hideDatacenter') === '1';
+      if (path === '/v1/analytics/visitors') {
+        return send(res, 200, { days, ...db.analytics.visitors({ days, hideDatacenter, limit, offset }) });
+      }
       return send(res, 200, { days, ...db.analytics.summary({ days, tzMinutes, hideDatacenter }) });
+    }
+
+    const vm = /^\/v1\/analytics\/visitors\/([0-9a-f]{16})$/.exec(path);
+    if (vm && method === 'GET') {
+      requireAdmin(req);
+      const visitor = db.analytics.visitor(vm[1]);
+      if (!visitor) throw new HttpError(404, 'not_found', 'No such visitor');
+      return send(res, 200, visitor);
     }
 
     if (path === '/admin' && method === 'GET') {

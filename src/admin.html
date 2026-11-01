@@ -29,8 +29,8 @@
   button:hover { border-color: var(--accent); }
   button.danger { color: var(--danger); }
   select, input, textarea { border: 1px solid var(--line); background: var(--bg); padding: 6px 8px; border-radius: 8px; }
-  main { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; min-height: calc(100vh - 58px); }
-  #list { border-right: 1px solid var(--line); overflow-y: auto; max-height: calc(100vh - 58px); }
+  .split { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; min-height: calc(100vh - 58px); }
+  .pane-list { border-right: 1px solid var(--line); overflow-y: auto; max-height: calc(100vh - 58px); }
   .item { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 16px; background: transparent; }
   .item.active { background: var(--chip); }
   .item .meta { display: flex; gap: 8px; color: var(--muted); font-size: 13px; align-items: center; flex-wrap: wrap; }
@@ -39,8 +39,8 @@
   .badge[data-s] { color: var(--c); } .badge[data-s="new"] { --c: var(--new); } .badge[data-s="triaged"] { --c: var(--triaged); }
   .badge[data-s="fixed"] { --c: var(--fixed); } .badge[data-s="wontfix"] { --c: var(--wontfix); }
   .badge[data-s="duplicate"] { --c: var(--duplicate); } .badge[data-s="spam"] { --c: var(--spam); }
-  #detail { padding: 20px 24px; overflow-y: auto; max-height: calc(100vh - 58px); }
-  #detail h2 { margin: 0 0 4px; font-size: 20px; }
+  .pane-detail { padding: 20px 24px; overflow-y: auto; max-height: calc(100vh - 58px); }
+  .pane-detail h2 { margin: 0 0 4px; font-size: 20px; }
   .desc { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 14px 0; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 14px; }
   dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
@@ -58,6 +58,9 @@
   .tab { border: 0; background: transparent; padding: 5px 12px; border-radius: 8px; font-weight: 600; color: var(--muted); }
   .tab[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
   .spacer { margin-right: auto; }
+  .launch { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .launch .muted { overflow-wrap: anywhere; }
+  #vdetail .rows { max-height: none; }
   .check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); cursor: pointer; }
   .check[hidden] { display: none; }
   #analytics { padding: 20px 24px 40px; max-width: 1200px; margin: 0 auto; }
@@ -85,11 +88,11 @@
   .empty { color: var(--muted); padding: 40px 0; text-align: center; }
   @media (max-width: 760px) { #analytics { padding: 16px; } .tile .value { font-size: 24px; } }
   @media (max-width: 760px) {
-    main { grid-template-columns: 1fr; }
-    #list { max-height: none; border-right: 0; }
-    #detail { max-height: none; padding: 16px; }
-    main.showing #list { display: none; }
-    main:not(.showing) #detail { display: none; }
+    .split { grid-template-columns: 1fr; }
+    .pane-list { max-height: none; border-right: 0; }
+    .pane-detail { max-height: none; padding: 16px; }
+    .split.showing .pane-list { display: none; }
+    .split:not(.showing) .pane-detail { display: none; }
   }
   .back { display: none; } @media (max-width: 760px) { .back { display: inline-block; margin-bottom: 12px; } }
 </style>
@@ -106,6 +109,7 @@
     <nav class="tabs" aria-label="Sections">
       <button id="tabReports" class="tab" aria-pressed="true">Bug reports</button>
       <button id="tabAnalytics" class="tab" aria-pressed="false">Analytics</button>
+      <button id="tabVisitors" class="tab" aria-pressed="false">Visitors</button>
     </nav>
     <span class="spacer"></span>
     <select id="filter" aria-label="Filter by status"></select>
@@ -118,9 +122,13 @@
     <button id="logout">Sign out</button>
   </header>
   <section id="analytics" hidden></section>
-  <main id="main">
-    <section id="list"></section>
-    <section id="detail"><p class="muted">Select a report.</p></section>
+  <main id="vmain" class="split" hidden>
+    <section id="vlist" class="pane-list"></section>
+    <section id="vdetail" class="pane-detail"><p class="muted">Select a visitor to see each of their launches.</p></section>
+  </main>
+  <main id="main" class="split">
+    <section id="list" class="pane-list"></section>
+    <section id="detail" class="pane-detail"><p class="muted">Select a report.</p></section>
   </main>
 </div>
 <script>
@@ -262,16 +270,88 @@ function setView(v) {
   try { localStorage.setItem('bsimAdminView', v); } catch {}
   $('tabReports').setAttribute('aria-pressed', String(v === 'reports'));
   $('tabAnalytics').setAttribute('aria-pressed', String(v === 'analytics'));
+  $('tabVisitors').setAttribute('aria-pressed', String(v === 'visitors'));
   $('main').hidden = v !== 'reports';
   $('filter').hidden = v !== 'reports';
   $('analytics').hidden = v !== 'analytics';
-  $('range').hidden = v !== 'analytics';
-  $('dcWrap').hidden = v !== 'analytics';
+  $('vmain').hidden = v !== 'visitors';
+  $('range').hidden = v === 'reports';
+  $('dcWrap').hidden = v === 'reports';
   return refresh();
 }
 
 function refresh() {
-  return (view === 'analytics' ? loadAnalytics() : loadList()).catch((e) => { if (e.message !== 'unauthorized') alert(e.message); });
+  const load = view === 'analytics' ? loadAnalytics() : view === 'visitors' ? loadVisitors() : loadList();
+  return load.catch((e) => { if (e.message !== 'unauthorized') alert(e.message); });
+}
+
+// ---- Visitors ----
+// A visitor is a salted hash of IP address + browser, so a new network or browser shows up as a new visitor.
+let currentVisitor = null;
+const deviceIcon = (d) => (d === 'Mobile' ? '📱' : d === 'Tablet' ? '📲' : '🖥️');
+const placeLabel = (r) => [r.city, r.region].filter(Boolean).concat(countryLabel(r.country || 'XX')).join(', ');
+const networkText = (r) => (r.asn ? (r.datacenter ? `🏢 ${r.network} (AS${r.asn})` : `AS${r.asn}`) : 'Unknown network');
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return 'just now';
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 129600) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} days ago`;
+}
+
+function visitorQuery(extra = {}) {
+  const q = new URLSearchParams({ days: $('range').value, limit: '50', ...extra });
+  if ($('hideDc').checked) q.set('hideDatacenter', '1');
+  return q;
+}
+
+async function loadVisitors(append = false) {
+  const list = $('vlist');
+  const offset = append ? Number(list.dataset.offset || 0) : 0;
+  const data = await (await api(`/v1/analytics/visitors?${visitorQuery({ offset: String(offset) })}`)).json();
+  if (!append) list.replaceChildren(el('p', { class: 'muted more', text: `${fmtNum(data.total)} visitor${data.total === 1 ? '' : 's'} in this range` }));
+  list.querySelector('button.more')?.remove();
+  for (const v of data.visitors) {
+    list.append(el('button', { class: 'item' + (currentVisitor === v.visitor ? ' active' : ''), 'data-id': v.visitor, onclick: () => openVisitor(v.visitor) },
+      el('div', { class: 'meta' },
+        el('span', { text: deviceIcon(v.device) }),
+        el('strong', { text: `${v.device} · ${v.os} · ${v.browser}` }),
+        v.datacenter ? el('span', { class: 'badge', 'data-s': 'spam', text: 'datacenter' }) : null),
+      el('div', { class: 'sum', text: placeLabel(v) }),
+      el('div', { class: 'meta' },
+        el('span', { text: `${fmtNum(v.launches)} launch${v.launches === 1 ? '' : 'es'}` }),
+        el('span', { text: `last ${ago(v.lastSeen)}` }),
+        v.allTimeFirstSeen < v.firstSeen ? el('span', { text: `first seen ${fmtDate(v.allTimeFirstSeen)}` }) : null)));
+  }
+  list.dataset.offset = String(offset + data.visitors.length);
+  if (offset + data.visitors.length < data.total) list.append(el('button', { class: 'more', text: 'Load more', onclick: () => loadVisitors(true) }));
+}
+
+async function openVisitor(id) {
+  currentVisitor = id;
+  for (const b of document.querySelectorAll('#vlist .item')) b.classList.toggle('active', b.dataset.id === id);
+  $('vmain').classList.add('showing');
+  const d = $('vdetail');
+  d.replaceChildren(el('p', { class: 'muted', text: 'Loading…' }));
+  const v = await (await api(`/v1/analytics/visitors/${id}`)).json();
+  const real = v.launches.filter((l) => !l.bot);
+  const latest = real[0] || v.launches[0];
+  const facts = [
+    ['Device', `${deviceIcon(latest.device)} ${latest.device}`], ['Operating system', latest.os], ['Browser', latest.browser],
+    ['Location', placeLabel(latest)], ['Network', networkText(latest)],
+    ['Launches', fmtNum(real.length)], ['First seen', fmtDate(v.launches[v.launches.length - 1].ts)], ['Last seen', fmtDate(v.launches[0].ts)],
+    ['Visitor ID', v.visitor],
+  ];
+  d.replaceChildren(
+    el('button', { class: 'back', text: '← All visitors', onclick: () => $('vmain').classList.remove('showing') }),
+    el('h2', { text: `${deviceIcon(latest.device)} ${latest.device} visitor` }),
+    el('p', { class: 'muted', text: 'Identified by a hash of their IP address and browser; a new network or browser counts as a new visitor.' }),
+    el('dl', {}, ...facts.flatMap(([k, val]) => [el('dt', { text: k }), el('dd', { text: val })])),
+    el('h3', { text: `Launches (${fmtNum(v.launches.length)})` }),
+    el('div', { class: 'rows' }, ...v.launches.map((l) => el('div', { class: 'launch' },
+      el('strong', { text: fmtDate(l.ts) }),
+      el('span', { class: 'muted', text: [placeLabel(l), `${l.device} · ${l.os} · ${l.browser}`, networkText(l), l.bot ? 'verified bot (not counted)' : null].filter(Boolean).join(' · ') })))),
+  );
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -431,6 +511,7 @@ function renderAnalytics() {
 
 $('tabReports').addEventListener('click', () => setView('reports'));
 $('tabAnalytics').addEventListener('click', () => setView('analytics'));
+$('tabVisitors').addEventListener('click', () => setView('visitors'));
 $('range').addEventListener('change', () => refresh());
 try { $('hideDc').checked = localStorage.getItem('bsimHideDc') === '1'; } catch {}
 $('hideDc').addEventListener('change', () => {
@@ -447,7 +528,7 @@ async function start() {
   $('login').hidden = true; $('app').hidden = false;
   let saved = 'reports';
   try { saved = localStorage.getItem('bsimAdminView') || 'reports'; } catch {}
-  await setView(saved === 'analytics' ? 'analytics' : 'reports');
+  await setView(['analytics', 'visitors'].includes(saved) ? saved : 'reports');
 }
 
 $('loginForm').addEventListener('submit', (e) => {

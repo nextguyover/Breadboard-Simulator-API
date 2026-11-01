@@ -238,7 +238,22 @@ out launches from known cloud/hosting networks. `totals` also has
 }
 ```
 
-The admin page's **Analytics** tab shows all of this as charts.
+### `GET /v1/analytics/visitors?days=30&limit=50&offset=0&hideDatacenter=1` (admin)
+
+Visitors seen in the range, most recently seen first: `{ total, visitors: [...] }`.
+Each has `visitor` (16-hex id), `launches`, `firstSeen`, `lastSeen` (in the
+range), `allTimeLaunches`, `allTimeFirstSeen`, and their latest launch's
+`country`, `region`, `city`, `device`, `os`, `browser`, `asn`, `network`,
+`datacenter`. A visitor is a salted hash of IP address + user agent, so the
+same person on a new network or browser shows up as a new visitor.
+
+### `GET /v1/analytics/visitors/:id` (admin)
+
+`{ visitor, launches: [...] }`: up to 500 launches, newest first, each with
+time, location, device/OS/browser, network and whether it was a verified bot.
+
+The admin page's **Analytics** tab shows the summary as charts, and the
+**Visitors** tab lists visitors and their launches.
 
 ## Other
 

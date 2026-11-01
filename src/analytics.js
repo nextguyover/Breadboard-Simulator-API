@@ -104,7 +104,39 @@ export function setupAnalytics(db) {
         firstLaunch: one(`SELECT MIN(ts) AS ts FROM launches ${where}`).ts,
       };
     },
+
+    // Visitors seen in the range, most recent first, with what their latest launch looked like.
+    visitors({ days, hideDatacenter = false, limit = 50, offset = 0 }) {
+      const since = days > 0 ? new Date(Date.now() - days * 86_400_000).toISOString() : '';
+      const dc = `asn IN (${DC_LIST})`;
+      const where = `WHERE ts >= ? AND bot = 0${hideDatacenter ? ` AND (asn IS NULL OR NOT ${dc})` : ''}`;
+      const total = db.prepare(`SELECT COUNT(DISTINCT visitor) AS n FROM launches ${where}`).get(since).n;
+      const rows = db.prepare(`
+        WITH v AS (
+          SELECT visitor, COUNT(*) AS launches, MIN(ts) AS firstSeen, MAX(ts) AS lastSeen, MAX(id) AS lastId
+          FROM launches ${where} GROUP BY visitor)
+        SELECT v.visitor, v.launches, v.firstSeen, v.lastSeen,
+               l.country, l.region, l.city, l.browser, l.os, l.device, l.asn,
+               (SELECT COUNT(*) FROM launches a WHERE a.visitor = v.visitor AND a.bot = 0) AS allTimeLaunches,
+               (SELECT MIN(ts) FROM launches a WHERE a.visitor = v.visitor AND a.bot = 0) AS allTimeFirstSeen
+        FROM v JOIN launches l ON l.id = v.lastId
+        ORDER BY v.lastSeen DESC LIMIT ? OFFSET ?`).all(since, limit, offset);
+      return { total, visitors: rows.map(withNetwork) };
+    },
+
+    // Every launch of one visitor, newest first.
+    visitor(id) {
+      const launches = db.prepare(`
+        SELECT ts, country, region, city, browser, os, device, asn, bot
+        FROM launches WHERE visitor = ? ORDER BY id DESC LIMIT 500`).all(id);
+      if (!launches.length) return null;
+      return { visitor: id, launches: launches.map((l) => withNetwork({ ...l, bot: !!l.bot })) };
+    },
   };
+}
+
+function withNetwork(r) {
+  return { ...r, network: r.asn ? DATACENTER_ASNS.get(r.asn) ?? null : null, datacenter: DATACENTER_ASNS.has(r.asn) };
 }
 
 export function parseUserAgent(ua = '') {
