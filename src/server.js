@@ -163,6 +163,7 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
         // Added by a Cloudflare Request Header Transform Rule (see docs/API.md).
         asn: /^[1-9]\d{0,9}$/.test(cf('x-bsim-asn') ?? '') ? Number(cf('x-bsim-asn')) : undefined,
         bot: cf('x-bsim-verified-bot') === 'true',
+        tz: cf('cf-timezone'),
       });
     } catch (err) {
       console.error('could not record launch', err);

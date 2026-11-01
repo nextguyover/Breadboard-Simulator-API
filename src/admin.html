@@ -60,6 +60,8 @@
   .spacer { margin-right: auto; }
   .launch { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   .launch .muted { overflow-wrap: anywhere; }
+  .launch .when { display: flex; gap: 4px 12px; flex-wrap: wrap; align-items: baseline; }
+  .launch .when span { color: var(--accent); font-size: 13px; }
   #vdetail .rows { max-height: none; }
   .check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); cursor: pointer; }
   .check[hidden] { display: none; }
@@ -299,6 +301,18 @@ function ago(iso) {
   return `${Math.round(s / 86400)} days ago`;
 }
 
+// A time in the visitor's own timezone (from Cloudflare), or null when it isn't known.
+function theirTime(iso, tz, withDate = true) {
+  if (!tz) return null;
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      timeZone: tz, timeZoneName: 'short', hour: 'numeric', minute: '2-digit',
+      ...(withDate ? { month: 'short', day: 'numeric', year: 'numeric' } : {}),
+    });
+  } catch { return null; }
+}
+const yourTime = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
 function visitorQuery(extra = {}) {
   const q = new URLSearchParams({ days: $('range').value, limit: '50', ...extra });
   if ($('hideDc').checked) q.set('hideDatacenter', '1');
@@ -321,6 +335,8 @@ async function loadVisitors(append = false) {
       el('div', { class: 'meta' },
         el('span', { text: `${fmtNum(v.launches)} launch${v.launches === 1 ? '' : 'es'}` }),
         el('span', { text: `last ${ago(v.lastSeen)}` }),
+        el('span', { text: `you ${new Date(v.lastSeen).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` }),
+        v.tz ? el('span', { text: `them ${theirTime(v.lastSeen, v.tz, false)}` }) : null,
         v.allTimeFirstSeen < v.firstSeen ? el('span', { text: `first seen ${fmtDate(v.allTimeFirstSeen)}` }) : null)));
   }
   list.dataset.offset = String(offset + data.visitors.length);
@@ -338,8 +354,9 @@ async function openVisitor(id) {
   const latest = real[0] || v.launches[0];
   const facts = [
     ['Device', `${deviceIcon(latest.device)} ${latest.device}`], ['Operating system', latest.os], ['Browser', latest.browser],
-    ['Location', placeLabel(latest)], ['Network', networkText(latest)],
-    ['Launches', fmtNum(real.length)], ['First seen', fmtDate(v.launches[v.launches.length - 1].ts)], ['Last seen', fmtDate(v.launches[0].ts)],
+    ['Location', placeLabel(latest)], ['Their timezone', latest.tz ? `${latest.tz} (now ${theirTime(new Date().toISOString(), latest.tz, false)})` : 'Unknown'],
+    ['Network', networkText(latest)],
+    ['Launches', fmtNum(real.length)], ['First seen', yourTime(v.launches[v.launches.length - 1].ts)], ['Last seen', yourTime(v.launches[0].ts)],
     ['Visitor ID', v.visitor],
   ];
   d.replaceChildren(
@@ -349,7 +366,8 @@ async function openVisitor(id) {
     el('dl', {}, ...facts.flatMap(([k, val]) => [el('dt', { text: k }), el('dd', { text: val })])),
     el('h3', { text: `Launches (${fmtNum(v.launches.length)})` }),
     el('div', { class: 'rows' }, ...v.launches.map((l) => el('div', { class: 'launch' },
-      el('strong', { text: fmtDate(l.ts) }),
+      el('div', { class: 'when' }, el('strong', { text: `${yourTime(l.ts)} your time` }),
+        el('span', { text: theirTime(l.ts, l.tz) ? `their time ${theirTime(l.ts, l.tz)}` : 'their time unknown' })),
       el('span', { class: 'muted', text: [placeLabel(l), `${l.device} · ${l.os} · ${l.browser}`, networkText(l), l.bot ? 'verified bot (not counted)' : null].filter(Boolean).join(' · ') })))),
   );
 }

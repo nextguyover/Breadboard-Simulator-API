@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/server.js';
 import { openDb } from '../src/db.js';
-import { parseUserAgent } from '../src/analytics.js';
+import { parseUserAgent, validTimeZone } from '../src/analytics.js';
 
 const ADMIN = 'test-admin-token-0123456789abcdef';
 const ORIGIN = 'https://app.example.test';
@@ -25,8 +25,9 @@ before(async () => {
 });
 after(() => server.close());
 
-function ping({ ip, country, city, region, ua = UA_ANDROID, origin = ORIGIN, query = '', asn, bot }) {
+function ping({ ip, country, city, region, ua = UA_ANDROID, origin = ORIGIN, query = '', asn, bot, tz }) {
   const headers = { 'CF-Connecting-IP': ip, 'User-Agent': ua };
+  if (tz) headers['CF-Timezone'] = tz;
   if (asn !== undefined) headers['X-Bsim-Asn'] = String(asn);
   if (bot !== undefined) headers['X-Bsim-Verified-Bot'] = String(bot);
   if (origin) headers.Origin = origin;
@@ -121,4 +122,16 @@ test('user agent parsing', () => {
     { browser: 'Firefox', os: 'Windows', device: 'Desktop' });
   assert.deepEqual(parseUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0'),
     { browser: 'Edge', os: 'Windows', device: 'Desktop' });
+});
+
+test('visitor timezone is stored when valid', async () => {
+  const auth = { headers: { Authorization: `Bearer ${ADMIN}` } };
+  await ping({ ip: '198.51.100.40', country: 'DE', tz: 'Europe/Berlin', ua: 'tz-test-1' });
+  await ping({ ip: '198.51.100.41', country: 'DE', tz: 'Not/A_Zone', ua: 'tz-test-2' });
+  const { visitors } = await (await fetch(`${base}/v1/analytics/visitors?days=1&limit=2`, auth)).json();
+  assert.deepEqual(visitors.map((v) => v.tz), [null, 'Europe/Berlin']);
+  const one = await (await fetch(`${base}/v1/analytics/visitors/${visitors[1].visitor}`, auth)).json();
+  assert.equal(one.launches[0].tz, 'Europe/Berlin');
+  assert.equal(validTimeZone('America/Argentina/Buenos_Aires'), 'America/Argentina/Buenos_Aires');
+  assert.equal(validTimeZone('<script>'), null);
 });

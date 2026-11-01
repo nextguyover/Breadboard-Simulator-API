@@ -31,7 +31,8 @@ export function setupAnalytics(db) {
       os      TEXT NOT NULL,
       device  TEXT NOT NULL,
       asn     INTEGER,
-      bot     INTEGER NOT NULL DEFAULT 0
+      bot     INTEGER NOT NULL DEFAULT 0,
+      tz      TEXT
     );
     CREATE INDEX IF NOT EXISTS launches_ts ON launches (ts);
     CREATE INDEX IF NOT EXISTS launches_visitor ON launches (visitor, ts);
@@ -40,18 +41,19 @@ export function setupAnalytics(db) {
   const cols = new Set(db.prepare('PRAGMA table_info(launches)').all().map((c) => c.name));
   if (!cols.has('asn')) db.exec('ALTER TABLE launches ADD COLUMN asn INTEGER');
   if (!cols.has('bot')) db.exec('ALTER TABLE launches ADD COLUMN bot INTEGER NOT NULL DEFAULT 0');
+  if (!cols.has('tz')) db.exec('ALTER TABLE launches ADD COLUMN tz TEXT');
 
   const recent = db.prepare('SELECT 1 FROM launches WHERE visitor = ? AND ts > ? LIMIT 1');
   const insert = db.prepare(`
-    INSERT INTO launches (ts, visitor, country, region, city, browser, os, device, asn, bot)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    INSERT INTO launches (ts, visitor, country, region, city, browser, os, device, asn, bot, tz)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
   return {
-    record({ visitor, country, region, city, userAgent, asn, bot }, now = new Date()) {
+    record({ visitor, country, region, city, userAgent, asn, bot, tz }, now = new Date()) {
       if (recent.get(visitor, new Date(now.getTime() - DEDUPE_MS).toISOString())) return false;
       const ua = parseUserAgent(userAgent);
       insert.run(now.toISOString(), visitor, country, region ?? null, city ?? null, ua.browser, ua.os, ua.device,
-        asn ?? null, bot ? 1 : 0);
+        asn ?? null, bot ? 1 : 0, validTimeZone(tz));
       return true;
     },
 
@@ -116,23 +118,34 @@ export function setupAnalytics(db) {
           SELECT visitor, COUNT(*) AS launches, MIN(ts) AS firstSeen, MAX(ts) AS lastSeen, MAX(id) AS lastId
           FROM launches ${where} GROUP BY visitor)
         SELECT v.visitor, v.launches, v.firstSeen, v.lastSeen,
-               l.country, l.region, l.city, l.browser, l.os, l.device, l.asn,
+               l.country, l.region, l.city, l.browser, l.os, l.device, l.asn, l.tz,
                (SELECT COUNT(*) FROM launches a WHERE a.visitor = v.visitor AND a.bot = 0) AS allTimeLaunches,
                (SELECT MIN(ts) FROM launches a WHERE a.visitor = v.visitor AND a.bot = 0) AS allTimeFirstSeen
         FROM v JOIN launches l ON l.id = v.lastId
-        ORDER BY v.lastSeen DESC LIMIT ? OFFSET ?`).all(since, limit, offset);
+        ORDER BY v.lastSeen DESC, v.lastId DESC LIMIT ? OFFSET ?`).all(since, limit, offset);
       return { total, visitors: rows.map(withNetwork) };
     },
 
     // Every launch of one visitor, newest first.
     visitor(id) {
       const launches = db.prepare(`
-        SELECT ts, country, region, city, browser, os, device, asn, bot
+        SELECT ts, country, region, city, browser, os, device, asn, bot, tz
         FROM launches WHERE visitor = ? ORDER BY id DESC LIMIT 500`).all(id);
       if (!launches.length) return null;
       return { visitor: id, launches: launches.map((l) => withNetwork({ ...l, bot: !!l.bot })) };
     },
   };
+}
+
+// An IANA zone name such as "Europe/Berlin" that this runtime knows, or null.
+export function validTimeZone(tz) {
+  if (typeof tz !== 'string' || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+){0,2}$/.test(tz)) return null;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
 }
 
 function withNetwork(r) {

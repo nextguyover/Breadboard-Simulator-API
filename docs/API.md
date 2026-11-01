@@ -244,13 +244,16 @@ Visitors seen in the range, most recently seen first: `{ total, visitors: [...] 
 Each has `visitor` (16-hex id), `launches`, `firstSeen`, `lastSeen` (in the
 range), `allTimeLaunches`, `allTimeFirstSeen`, and their latest launch's
 `country`, `region`, `city`, `device`, `os`, `browser`, `asn`, `network`,
-`datacenter`. A visitor is a salted hash of IP address + user agent, so the
+`datacenter`, `tz` (the visitor's IANA timezone from Cloudflare's
+`cf-timezone` header, or `null` before the location headers were on). A visitor is a salted hash of IP address + user agent, so the
 same person on a new network or browser shows up as a new visitor.
 
 ### `GET /v1/analytics/visitors/:id` (admin)
 
 `{ visitor, launches: [...] }`: up to 500 launches, newest first, each with
-time, location, device/OS/browser, network and whether it was a verified bot.
+time, location, timezone, device/OS/browser, network and whether it was a
+verified bot. The admin page shows each time in both your timezone and the
+visitor's.
 
 The admin page's **Analytics** tab shows the summary as charts, and the
 **Visitors** tab lists visitors and their launches.
