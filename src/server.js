@@ -160,6 +160,9 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
         region: cf('cf-region'),
         city: cf('cf-ipcity'),
         userAgent: ua,
+        // Added by a Cloudflare Request Header Transform Rule (see docs/API.md).
+        asn: /^[1-9]\d{0,9}$/.test(cf('x-bsim-asn') ?? '') ? Number(cf('x-bsim-asn')) : undefined,
+        bot: cf('x-bsim-verified-bot') === 'true',
       });
     } catch (err) {
       console.error('could not record launch', err);
@@ -189,7 +192,8 @@ export function createApp(cfg, db = openDb(cfg.dbPath)) {
       if (!Number.isInteger(days) || days < 0 || days > 3660 || !Number.isInteger(tzMinutes) || Math.abs(tzMinutes) > 900) {
         throw new HttpError(400, 'validation_failed', 'Bad query', { fields: { days: '0 to 3660', tz: '-900 to 900' } });
       }
-      return send(res, 200, { days, ...db.analytics.summary({ days, tzMinutes }) });
+      const hideDatacenter = url.searchParams.get('hideDatacenter') === '1';
+      return send(res, 200, { days, ...db.analytics.summary({ days, tzMinutes, hideDatacenter }) });
     }
 
     if (path === '/admin' && method === 'GET') {

@@ -58,6 +58,8 @@
   .tab { border: 0; background: transparent; padding: 5px 12px; border-radius: 8px; font-weight: 600; color: var(--muted); }
   .tab[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
   .spacer { margin-right: auto; }
+  .check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .check[hidden] { display: none; }
   #analytics { padding: 20px 24px 40px; max-width: 1200px; margin: 0 auto; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .tile, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
@@ -111,6 +113,7 @@
       <option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option>
       <option value="90">Last 90 days</option><option value="365">Last year</option><option value="0">All time</option>
     </select>
+    <label id="dcWrap" class="check" hidden><input id="hideDc" type="checkbox"> Hide datacenters</label>
     <button id="refresh">Refresh</button>
     <button id="logout">Sign out</button>
   </header>
@@ -263,6 +266,7 @@ function setView(v) {
   $('filter').hidden = v !== 'reports';
   $('analytics').hidden = v !== 'analytics';
   $('range').hidden = v !== 'analytics';
+  $('dcWrap').hidden = v !== 'analytics';
   return refresh();
 }
 
@@ -344,6 +348,18 @@ function barList(rows, label, total) {
   }));
 }
 
+function networkLabel(r) {
+  return r.datacenter ? `🏢 ${r.name} (AS${r.asn})` : `AS${r.asn}`;
+}
+
+function networksHint(t, hidden) {
+  if (!t.withNetwork) return 'Add the Cloudflare rule from the README to see networks and filter out bots.';
+  const parts = [];
+  if (t.verifiedBots) parts.push(`${fmtNum(t.verifiedBots)} known bot launch${t.verifiedBots === 1 ? '' : 'es'} excluded`);
+  if (t.datacenter) parts.push(`${fmtNum(t.datacenter)} from datacenters (🏢)${hidden ? ', hidden' : ''}`);
+  return parts.length ? parts.join(' · ') + '.' : 'No bot or datacenter traffic in this range.';
+}
+
 function card(title, hint, body) {
   return el('div', { class: 'card' }, el('h3', { text: title }), hint ? el('p', { class: 'hint', text: hint }) : null, body);
 }
@@ -372,6 +388,7 @@ let lastAnalytics = null;
 async function loadAnalytics() {
   const days = Number($('range').value);
   const q = new URLSearchParams({ days: String(days), tz: String(-new Date().getTimezoneOffset()) });
+  if ($('hideDc').checked) q.set('hideDatacenter', '1');
   lastAnalytics = { data: await (await api(`/v1/analytics?${q}`)).json(), days };
   renderAnalytics();
 }
@@ -408,12 +425,18 @@ function renderAnalytics() {
       card('Operating systems', null, barList(data.os, (r) => r.key, t.launches)),
       card('Browsers', null, barList(data.browsers, (r) => r.key, t.launches))),
     el('div', { class: 'grid2' }, card('Time of day', 'Your local time.', hourChart(data.hours, chartW))),
+    el('div', { class: 'grid2' }, card('Networks', networksHint(t, data.hideDatacenter), barList(data.networks, networkLabel, t.launches))),
   );
 }
 
 $('tabReports').addEventListener('click', () => setView('reports'));
 $('tabAnalytics').addEventListener('click', () => setView('analytics'));
 $('range').addEventListener('change', () => refresh());
+try { $('hideDc').checked = localStorage.getItem('bsimHideDc') === '1'; } catch {}
+$('hideDc').addEventListener('change', () => {
+  try { localStorage.setItem('bsimHideDc', $('hideDc').checked ? '1' : '0'); } catch {}
+  refresh();
+});
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);

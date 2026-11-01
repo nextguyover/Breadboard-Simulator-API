@@ -201,12 +201,27 @@ kept.
   (Cloudflare dashboard: Rules, Settings / Managed Transforms). It is free.
 - Both are only read when `TRUST_CLOUDFLARE=1`. Requests without them are
   counted under country `XX` (unknown).
+- **Bots and networks** need one Request Header Transform Rule (free). In the
+  Cloudflare dashboard: Rules, Overview, Create rule, Request Header Transform
+  Rule. Match the custom expression
+  `http.host eq "api.breadboardsimulator.com" and http.request.uri.path eq "/healthz"`,
+  then add two **Set dynamic** headers:
+  `X-Bsim-Asn` = `to_string(ip.src.asnum)` and
+  `X-Bsim-Verified-Bot` = `to_string(cf.client.bot)`.
+  Launches from Cloudflare's verified bots (Googlebot and friends) are then
+  stored but never counted, and the Networks chart marks well-known cloud and
+  hosting networks (AWS, Google Cloud, Azure, DigitalOcean, Hetzner, OVH, …),
+  which the admin page can hide with **Hide datacenters**. Because the rule
+  *sets* these headers, visitors can't fake them.
 
-### `GET /v1/analytics?days=30&tz=600` (admin)
+### `GET /v1/analytics?days=30&tz=600&hideDatacenter=1` (admin)
 
 `days` is how far back to look (0 = all time, default 30). `tz` is the
 viewer's UTC offset in minutes so daily and hourly buckets match their
-calendar (the admin page sends it automatically).
+calendar (the admin page sends it automatically). `hideDatacenter=1` leaves
+out launches from known cloud/hosting networks. `totals` also has
+`verifiedBots` (excluded), `datacenter` and `withNetwork` counts, and
+`networks` lists `{ asn, name, datacenter, launches, visitors }`.
 
 ```json
 {

@@ -90,7 +90,9 @@ The **Analytics** tab on `/admin` counts app launches (one ping per app load)
 and shows them over time and by country, city, device, OS, browser and hour.
 Countries work out of the box behind Cloudflare. For cities, turn on
 **Add visitor location headers** in the Cloudflare dashboard under Rules,
-Settings (Managed Transforms). See [docs/API.md](docs/API.md#launch-analytics).
+Settings (Managed Transforms). To leave out bots and see which networks
+launches come from, add the small header rule described in
+[docs/API.md](docs/API.md#launch-analytics).
 
 ## Reading reports
 

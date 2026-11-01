@@ -25,8 +25,10 @@ before(async () => {
 });
 after(() => server.close());
 
-function ping({ ip, country, city, region, ua = UA_ANDROID, origin = ORIGIN, query = '' }) {
+function ping({ ip, country, city, region, ua = UA_ANDROID, origin = ORIGIN, query = '', asn, bot }) {
   const headers = { 'CF-Connecting-IP': ip, 'User-Agent': ua };
+  if (asn !== undefined) headers['X-Bsim-Asn'] = String(asn);
+  if (bot !== undefined) headers['X-Bsim-Verified-Bot'] = String(bot);
   if (origin) headers.Origin = origin;
   if (country) headers['CF-IPCountry'] = country;
   // Cloudflare sends UTF-8 bytes; fetch only takes latin1 header strings, so pass them that way.
@@ -57,6 +59,26 @@ test('counts app launches by country, city, device and browser', async () => {
   assert.deepEqual(Object.fromEntries(a.devices.map((d) => [d.key, d.launches])), { Mobile: 3, Desktop: 1 });
   assert.deepEqual(Object.fromEntries(a.browsers.map((d) => [d.key, d.launches])), { Chrome: 3, Safari: 1 });
   assert.equal(a.hours.reduce((n, h) => n + h.launches, 0), 4);
+});
+
+test('verified bots are excluded and datacenter traffic can be hidden', async () => {
+  const before = (await analytics('?days=7')).totals.launches;
+  await ping({ ip: '198.51.100.20', country: 'US', asn: 15169, bot: true }); // Googlebot
+  await ping({ ip: '198.51.100.21', country: 'US', asn: 16509, bot: false }); // AWS
+  await ping({ ip: '198.51.100.22', country: 'NZ', asn: 9500, bot: false }); // home ISP
+  await ping({ ip: '198.51.100.23', country: 'NZ', asn: 0 }); // unknown network
+
+  const a = await analytics('?days=7');
+  assert.equal(a.totals.launches, before + 3);
+  assert.equal(a.totals.verifiedBots, 1);
+  assert.equal(a.totals.datacenter, 1);
+  assert.equal(a.totals.withNetwork, 3);
+  assert.deepEqual(a.networks.map((n) => [n.asn, n.datacenter, n.name]), [[9500, false, null], [16509, true, 'Amazon AWS']]);
+
+  const hidden = await analytics('?days=7&hideDatacenter=1');
+  assert.equal(hidden.hideDatacenter, true);
+  assert.equal(hidden.totals.launches, before + 2);
+  assert.deepEqual(hidden.networks.map((n) => n.asn), [9500]);
 });
 
 test('analytics needs the admin token and validates its query', async () => {
